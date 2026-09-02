@@ -1,22 +1,15 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-
-type LoginResponse = {
-  user: {
-    id: number;
-    name: string;
-    email: string;
-  };
-  token: string;
-};
+import { getMe, login } from "@/services/auth";
+import type { User } from "@/types/user";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const [usuario, setUsuario] = useState<unknown>(null);
+  const [usuario, setUsuario] = useState<User | null>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -25,33 +18,8 @@ export default function LoginPage() {
     setUsuario(null);
 
     try {
-      const loginResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!loginResponse.ok) {
-        throw new Error("Credenciais inválidas.");
-      }
-
-      const { token }: LoginResponse = await loginResponse.json();
-
-      const userResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      });
-
-      if (!userResponse.ok) {
-        throw new Error("Login funcionou, mas /api/user falhou.");
-      }
-
-      setUsuario(await userResponse.json());
+      const { token } = await login(email, password);
+      setUsuario(await getMe(token));
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Erro desconhecido.");
     } finally {

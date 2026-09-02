@@ -5,7 +5,7 @@ Site institucional para um estúdio de arquitetura (portfólio, blog, loja/catá
 ## Stack
 
 - **Backend** (`backend/`): Laravel 12 + Sanctum (autenticação por token Bearer) + MySQL.
-- **Frontend** (`frontend-next/`): Next.js 16 (App Router) + TypeScript + Tailwind CSS v4.
+- **Frontend** (`frontend/`): Next.js 16 (App Router) + TypeScript + Tailwind CSS v4.
 - Comunicação: API REST, CORS liberado do backend para o frontend.
 
 ## Pré-requisitos
@@ -44,10 +44,10 @@ php artisan serve
 ```
 Backend disponível em `http://localhost:8000`.
 
-## Frontend (`frontend-next/`)
+## Frontend (`frontend/`)
 
 ```bash
-cd frontend-next
+cd frontend
 pnpm install
 cp .env.local.example .env.local
 pnpm dev
@@ -64,13 +64,13 @@ Os dois servidores precisam rodar ao mesmo tempo, em terminais separados:
 cd backend && php artisan serve
 
 # terminal 2
-cd frontend-next && pnpm dev
+cd frontend && pnpm dev
 ```
 
 ## Estrutura
 
 ```
 backend/        → API Laravel
-frontend-next/  → aplicação Next.js
+frontend/  → aplicação Next.js
 docs/           → contexto do projeto, decisões de arquitetura e regras de negócio
 ```
