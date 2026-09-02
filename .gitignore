@@ -1,0 +1,11 @@
+.claude/
+.DS_Store
+Thumbs.db
+
+# backend (Laravel)
+backend/.env
+
+# frontend-next (Next.js)
+frontend-next/.env
+frontend-next/.env.local
+frontend-next/.env.*.local
