@@ -12,11 +12,4 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/logout', [AuthenticatedTokenController::class, 'destroy']);
 });
 
-Route::get('/teste', function () {
-    return response()->json([
-        'sucesso' => true,
-        'mensagem' => 'Olá do Laravel! A comunicação CORS está funcionando perfeitamente.',
-    ]);
-});
-
 Route::post('/login', [AuthenticatedTokenController::class, 'store']);
