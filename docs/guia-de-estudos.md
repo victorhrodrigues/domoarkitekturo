@@ -155,6 +155,22 @@ A "casa explodida" saiu do protótipo standalone (`casa_linhas.html`, Three.js p
 
 ---
 
-## 8. Como continuar usando este arquivo
+## 8. Loader de carregamento dos assets 3D: progresso "de verdade" vs. progresso agradável
+
+Antes da cena 3D aparecer, o `.glb` da casa e a textura da logo precisam terminar de baixar. Em vez de deixar a tela em branco nesse intervalo (o que o `<Suspense fallback={null}>` faz por padrão), foi criado um loader (`Loader.tsx` + `BlueprintSvg.tsx` + o hook `useSmoothProgress`) que desenha um croqui em SVG (traçado à mão no Figma, sobre um screenshot da cena na posição inicial da câmera, pra bater com a perspectiva do modelo 3D) conforme os arquivos carregam.
+
+### `pathLength="1"` evita medir cada `<path>` em JavaScript
+Animar um SVG "sendo desenhado" (efeito `stroke-dashoffset`) normalmente exige medir o comprimento real de cada `<path>` em tempo de execução (`path.getTotalLength()`) pra saber o valor certo de `stroke-dasharray`/`stroke-dashoffset` — cada traçado tem um comprimento diferente. O atributo SVG nativo `pathLength="1"` evita essa medição: ele redefine a "régua" de comprimento do path pra sempre valer exatamente 1, não importa o tamanho real do traçado. Com isso, `stroke-dasharray: 1; stroke-dashoffset: 1;` funciona igual pra qualquer path do desenho, sem nenhum JavaScript de medição — bem mais simples com muitos paths (283, nesse caso) do que medir um por um.
+
+### Progresso "fake" com duração mínima, mas sem mentir sobre o fim
+O `useProgress` do drei conta progresso por **item concluído** (por arquivo), não por byte baixado — com poucos arquivos grandes (o `.glb`, a textura), o valor pula em poucos degraus grandes (0% → 50% → 100%) em vez de subir suavemente. O hook `useSmoothProgress` resolve isso simulando uma subida suave por tempo (`requestAnimationFrame` + interpolação, o mesmo tipo de suavização usada na animação 3D) em vez de depender de bytes reais, com duas regras que evitam que essa simulação minta:
+- Se o carregamento real terminar muito rápido (dentro de uma janela de tolerância, ex. 150ms — sinal de que os assets já estavam em cache do navegador), a barra pula direto pra 100% em vez de forçar uma animação de 2,5s à toa.
+- Se o carregamento real ainda não tiver terminado, a barra nunca passa de um teto (90%), mesmo que o tempo mínimo de animação já tenha se passado — só libera de 90% pra 100% quando o carregamento de verdade confirmar que terminou.
+
+**Lição**: numa tela de carregamento, "parecer suave" e "estar certo" são objetivos diferentes — dá pra ter os dois ao mesmo tempo, desde que a barra simulada tenha um teto que só é liberado quando o trabalho real de fato terminou.
+
+---
+
+## 9. Como continuar usando este arquivo
 
 Sempre que fizermos algo novo que valha a pena guardar como aprendizado — um padrão de código, uma decisão de arquitetura com trade-off relevante, ou um bug real com causa não óbvia — isso entra aqui, na seção correspondente (ou numa nova seção, se for um tópico novo). O [`contexto-do-projeto.md`](./contexto-do-projeto.md) continua sendo o lugar do "o que existe e por quê"; este arquivo é o "o que aprendemos e como pensar sobre isso".

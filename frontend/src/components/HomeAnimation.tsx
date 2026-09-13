@@ -4,7 +4,7 @@ import { Suspense, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, ScrollControls, useGLTF, useScroll, useTexture } from "@react-three/drei";
-
+import { Loader } from "./Loader";
 // ---------------------------------------------------------------- ajustes
 const ARQUIVO_GLB = "/models/casa_corrigida.glb";
 const ARQUIVO_LOGO = "/images/logo-domo-otimizado.png";
@@ -131,6 +131,7 @@ export default function HomeAnimation({ children }: { children?: React.ReactNode
           concluido ? "opacity-0" : "opacity-100"
         }`}
       >
+        <Loader />
         <Canvas
           camera={{ position: CAMERA_POS.toArray(), fov: 32, near: 0.1, far: 200 }}
           gl={{ antialias: true, alpha: true }}
