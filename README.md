@@ -1,11 +1,12 @@
 # Domoarkitekturo
 
-Site institucional para um estúdio de arquitetura (portfólio, blog, loja/catálogo e formulário de contato). Veja o contexto completo do projeto em [`docs/contexto-do-projeto.md`](docs/contexto-do-projeto.md).
+Site institucional para um estúdio de arquitetura que também é um café com loja geek (portfólio, blog, loja/catálogo e formulário de contato). Veja o contexto completo do projeto em [`docs/contexto-do-projeto.md`](docs/contexto-do-projeto.md).
 
 ## Stack
 
 - **Backend** (`backend/`): Laravel 12 + Sanctum (autenticação por token Bearer) + MySQL.
 - **Frontend** (`frontend/`): Next.js 16 (App Router) + TypeScript + Tailwind CSS v4.
+- **3D** (home): Three.js + React Three Fiber + `@react-three/drei` — casa modelada no Blender, animação guiada por scroll.
 - Comunicação: API REST, CORS liberado do backend para o frontend.
 
 ## Pré-requisitos

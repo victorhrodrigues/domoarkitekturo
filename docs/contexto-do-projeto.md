@@ -23,14 +23,22 @@
 backend/
   app/Http/Controllers/Auth/AuthenticatedTokenController.php  → login (store) / logout (destroy) por token
   app/Http/Requests/Auth/LoginRequest.php                      → validação + rate limiting do login (reaproveitado do Breeze)
-  app/Models/User.php           → único model de domínio existente (usa HasApiTokens)
-  database/migrations/          → users, sessions, cache, jobs, personal_access_tokens (Sanctum)
-  routes/api.php                → /api/login, /api/logout, /api/user, /api/teste (debug do CORS)
+  app/Http/Middleware/EnsureUserIsAdmin.php                    → bloqueia rota pra quem não tem role admin (alias "admin")
+  app/Enums/UserRole.php         → enum PHP (Admin/Cliente), backed por string, usado no cast do User
+  app/Models/User.php           → único model de domínio existente (usa HasApiTokens, HasUuids; id é UUID)
+  database/migrations/          → users (com coluna role), sessions, cache, jobs, personal_access_tokens (Sanctum, uuidMorphs)
+  routes/api.php                → /api/login, /api/logout, /api/user, /api/admin (protegida por auth:sanctum + admin)
 
 frontend/
   src/app/layout.tsx             → layout raiz (metadata global)
-  src/app/(site)/page.tsx         → home pública (placeholder)
+  src/app/(site)/page.tsx         → home pública (com a animação 3D de abertura)
   src/app/(admin)/admin/          → painel administrativo (placeholder)
+  src/components/HomeAnimation.tsx → cena 3D (R3F + drei) da home: casa explodida que monta e logo que entra, ambos guiados pelo scroll
+  src/components/Loader.tsx        → tela de carregamento dos assets 3D (croqui SVG "sendo desenhado")
+  src/components/BlueprintSvg.tsx  → o croqui em si (283 <path>, desenhado no Figma sobre a perspectiva real da câmera)
+  src/hooks/useSmoothProgress.ts   → suaviza o progresso bruto do drei (que pula em degraus) numa barra de carregamento agradável
+  public/models/casa_corrigida.glb → modelo 3D exportado do Blender (casa em exploded axonometric view)
+  public/images/logo-domo*.png     → logo com fundo transparente, usada como THREE.Sprite na animação
 ```
 
 ## Objetivo do site
@@ -124,17 +132,23 @@ services/auth.ts    → login()/getMe()/logout(), construídos sobre lib/api.ts
 ```
 Distinção `lib/` vs `services/`: `lib/` é infraestrutura genérica (não sabe nada sobre login/domínio), `services/` é lógica específica de domínio construída em cima da `lib/`. `login/page.tsx` foi refatorado pra só cuidar de UI/estado, delegando as chamadas de rede pra `services/auth.ts`.
 
-Decisão consciente de **não** criar ainda `actions/`, `components/` nem `hooks/` — sem conteúdo real pra colocar neles hoje, criar vazio seria estrutura decorativa. Critério pra criar cada uma quando chegar a hora:
-- `components/` — quando houver repetição de UI pra extrair.
-- `actions/` — Fase 5 (Server Actions do painel admin).
-- `hooks/` — se a lógica de autenticação precisar ser reusada em mais de uma página.
+Decisão consciente, na época, de **não** criar ainda `actions/`, `components/` nem `hooks/` — sem conteúdo real pra colocar neles, criar vazio seria estrutura decorativa. `components/` e `hooks/` deixaram de ser hipotéticas com a animação 3D da home (ver seção abaixo); `actions/` continua sem uso — critério inalterado: só quando a Fase 5 (Server Actions do painel admin) chegar.
+
+## Animação 3D da home (React Three Fiber + drei) — 2026-09-13
+
+A home (`(site)/page.tsx`) abre com uma cena 3D: um modelo da casa (modelada e animada no Blender pelo usuário, exportada em `.glb` como "exploded axonometric view" — peças afastadas que se encaixam) que se monta conforme o usuário rola a página, seguida da logo entrando por trás da câmera. Escolhido deliberadamente **React Three Fiber + `@react-three/drei`** em vez de Three.js puro (que já tinha um protótipo funcional em `public/models/casa_linhas.html`, removido depois de a migração ser validada) — o motivo é aprendizado dessas ferramentas, não necessidade técnica (ver `guia-de-estudos.md` para a lista de bugs de integração encontrados nessa migração).
+
+Enquanto o `.glb` e a textura da logo carregam, um loader cobre a tela: um croqui em SVG (283 traços, desenhados no Figma sobre um screenshot da própria cena na posição inicial da câmera, pra bater com a perspectiva) que vai "se desenhando" conforme os arquivos baixam. Como o progresso bruto do drei (`useProgress`) só reporta por arquivo concluído (poucos degraus grandes, não uma subida suave), o hook `useSmoothProgress` simula uma subida suave por tempo, com um teto que só libera pra 100% quando o carregamento real de fato termina — evita tanto uma barra "pulando" quanto uma barra que mente sobre estar pronta.
+
+## Controle de acesso: UUID + papéis de usuário (RBAC) — 2026-10-07
+
+`users.id` deixou de ser auto-incremento e passou a ser **UUID** (`HasUuids` no model, `$table->uuid('id')->primary()` na migration) — decisão tomada cedo de propósito, antes de existir qualquer tabela de domínio referenciando `user_id`, pra não precisar converter nada depois. Toda tabela que referencia o usuário foi ajustada em conjunto: `personal_access_tokens` usa `uuidMorphs('tokenable')` (em vez do `morphs` padrão do Sanctum, que esperava bigint) e `sessions.user_id` é `foreignUuid`.
+
+Usuário agora tem um papel (`role`, coluna `string` — não `enum` de banco, pra não exigir migration toda vez que um papel novo for adicionado), mapeado pro enum PHP `App\Enums\UserRole` (`Admin`/`Cliente`) via cast no model (`'role' => UserRole::class`). Rotas administrativas usam o middleware `App\Http\Middleware\EnsureUserIsAdmin` (alias `admin`, registrado em `bootstrap/app.php`), aplicado em conjunto com `auth:sanctum`: `Route::middleware(['auth:sanctum', 'admin'])->group(...)`. Testado manualmente via `Invoke-RestMethod` com um usuário admin (200) e um usuário cliente (403) contra uma rota de teste (`GET /api/admin`) — fluxo completo confirmado funcionando.
+
+Decisão em aberto, ainda não resolvida: se o papel `cliente` vai ter cadastro público (reabriria o registro removido na limpeza do Vite) ou só existe pra uso interno/futuro por enquanto — ver [`implementacao-papeis-de-usuario.md`](./implementacao-papeis-de-usuario.md), Parte 3.
 
 ### Renomeação `frontend-next/` → `frontend/` (2026-09-02)
 
 Com o Vite removido, não havia mais motivo pro Next.js se chamar `frontend-next` (era só pra não colidir com o Vite). Renomeado pra `frontend/`. Detalhe técnico: um `git mv`/`Rename-Item` direto falhou com "Permission denied" — o VSCode (rodando essa própria sessão) mantém um watch persistente na pasta do workspace, o que trava renomeação atômica de diretório no Windows. Contornado copiando o conteúdo (só código-fonte, sem `node_modules`/`.next`, que são gerados) pra uma pasta nova via `robocopy`, reinstalando dependências (`pnpm install`) e apagando a pasta antiga — o git reconheceu automaticamente como rename (similaridade de conteúdo), não como arquivos novos.
 
-## Pontos técnicos a ter em mente
-
-Não são bugs urgentes — são notas para quando as áreas relacionadas forem retomadas:
-
-- A rota `/api/teste` (routes/api.php) é um artefato da fase de teste de conectividade inicial — candidata a remoção quando a Fase 3 (domínio) estiver rodando de verdade.
