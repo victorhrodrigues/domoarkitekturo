@@ -12,4 +12,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/logout', [AuthenticatedTokenController::class, 'destroy']);
 });
 
+Route::middleware(['auth:sanctum', 'admin'])->group(function () {
+    Route::get('/admin', function (Request $request) {
+        return response()->json(['message' => 'Acesso permitido. Você é um administrador.']);
+    });
+});
+
 Route::post('/login', [AuthenticatedTokenController::class, 'store']);
