@@ -171,6 +171,43 @@ O `useProgress` do drei conta progresso por **item concluído** (por arquivo), n
 
 ---
 
-## 9. Como continuar usando este arquivo
+## 9. Backend: papéis, UUID e categorias — aprendizados
+
+### Middleware checa *quem*, Form Request valida *o quê*
+O middleware `admin` olha o usuário já autenticado (`$request->user()->role`) e barra rotas inteiras com `403`. Já validar o conteúdo de um `POST` (campos obrigatórios, formato) é papel do **Form Request** (`StoreXRequest`). Confundir os dois leva a procurar o problema no lugar errado.
+
+### Trocar o `id` para UUID mexe em outras tabelas
+`users.id` UUID exige ajustar quem referencia: `uuidMorphs('tokenable')` no Sanctum (o `morphs` padrão espera bigint), `foreignUuid` em `sessions.user_id` e em qualquer FK futura. Sem isso o tipo não bate e nada acusa erro na migration, só as comparações falham. Decidir cedo (antes de existirem tabelas de domínio) custa quase nada.
+
+### `string` + enum PHP em vez de `enum` de banco
+`role` é coluna `string`, mapeada pelo enum PHP `UserRole` via `casts()`. Um `enum` de banco trava a lista de valores no schema (novo valor = nova migration). O enum PHP dá a mesma segurança (erro de digitação vira erro imediato) sem a rigidez.
+
+### Migration nova vs editar a antiga
+Em dev local, editar uma migration e rodar `migrate:fresh` funciona. Em produção não dá (apagaria os dados), e `migrate` comum **não reexecuta** uma migration já aplicada, mesmo editada: a coluna nova simplesmente não aparece, sem erro. Hábito certo: mudança de schema com dado real = migration nova.
+
+### `self` vs `static`
+`self` é a classe onde o código foi escrito; `static` é a classe que foi chamada em tempo de execução (*late static binding*). Só diferem com herança, mas `static` é a convenção do Laravel em `booted()`.
+
+### `make:model Category -a` gera stubs, com armadilhas
+Gera migration, factory, seeder, policy, controller e Form Requests, todos vazios. Armadilhas: `authorize()` dos Form Requests vem `false` (todo request leva `403`); o controller de recurso traz `create()`/`edit()`, que são de formulário HTML e não servem numa API (prefira `make:controller --api --model=X --requests`); a policy fica sem uso se a autorização é por middleware; e ele cria outra migration se você já tinha escrito a sua.
+
+### Eventos de model nem sempre disparam
+`creating`/`deleted` rodam com `create()`/`save()`, mas **não** em `DB::table()->insert()`. E o `DatabaseSeeder` usa `WithoutModelEvents`, que desliga os eventos durante o seed: um slug gerado no `creating` não existe em dado criado por seeder.
+
+### Slug: gerar uma vez, com base fixa
+Slug é o título em formato de URL (`Iluminação de Sala` vira `iluminacao-de-sala`), para link legível e SEO. Gere **uma vez**, na criação (editar o título não muda o slug, senão links compartilhados quebram). Em colisão, guarde a `$base` e só concatene o sufixo (`$base.'-'.$n`); recalcular sobre o candidato acumularia (`-2-3`). `name` único não garante `slug` único.
+
+### `explode()` é frágil para extrair pedaço de caminho
+`explode('image/', $s)` devolve um array de tamanho variável: se o separador não existe vem **1** posição e `[1]` não existe (warning, não exception, então o `try/catch (Throwable)` não pega). Prefira `Str::after()` ou guarde caminho relativo e dispense o parsing.
+
+### Postman: o corpo precisa bater com o `Content-Type`
+`form-data` codifica o corpo como multipart; com o header forçado em `application/json`, o Laravel tenta `json_decode` num multipart e os campos chegam vazios (`422`). Para API JSON, use `raw` + `JSON`.
+
+### A API protegida não protege a página
+`GET /api/admin` exige token e papel; já `localhost:3000/admin` é uma página do Next.js que hoje renderiza para qualquer um. Proteger a página é outra camada (`middleware.ts`, que roda no servidor e só lê cookies, não `localStorage`, ou um guard client-side).
+
+---
+
+## 10. Como continuar usando este arquivo
 
 Sempre que fizermos algo novo que valha a pena guardar como aprendizado — um padrão de código, uma decisão de arquitetura com trade-off relevante, ou um bug real com causa não óbvia — isso entra aqui, na seção correspondente (ou numa nova seção, se for um tópico novo). O [`contexto-do-projeto.md`](./contexto-do-projeto.md) continua sendo o lugar do "o que existe e por quê"; este arquivo é o "o que aprendemos e como pensar sobre isso".

@@ -25,7 +25,8 @@ backend/
   app/Http/Requests/Auth/LoginRequest.php                      → validação + rate limiting do login (reaproveitado do Breeze)
   app/Http/Middleware/EnsureUserIsAdmin.php                    → bloqueia rota pra quem não tem role admin (alias "admin")
   app/Enums/UserRole.php         → enum PHP (Admin/Cliente), backed por string, usado no cast do User
-  app/Models/User.php           → único model de domínio existente (usa HasApiTokens, HasUuids; id é UUID)
+  app/Models/User.php           → usa HasApiTokens, HasUuids (id é UUID), cast de role
+  app/Models/Category.php       → categorias do blog (em andamento, ver docs/features/postagens/)
   database/migrations/          → users (com coluna role), sessions, cache, jobs, personal_access_tokens (Sanctum, uuidMorphs)
   routes/api.php                → /api/login, /api/logout, /api/user, /api/admin (protegida por auth:sanctum + admin)
 
@@ -49,11 +50,15 @@ Resumo das seções previstas: Home, Portfólio (residencial/comercial), Serviç
 
 MVP (Fase 1): site institucional com catálogo vitrine (checkout via WhatsApp, sem carrinho/pagamento ainda). Fase 2: e-commerce completo (carrinho, gateway de pagamento, estoque).
 
-## Estado atual (2026-09-02)
+## Estado atual (atualizado em 2026-10-08)
+
+**Catálogo de features**: cada recurso em construção tem uma pasta em [`features/`](./features/README.md) com `spec.md` (o que é) e `task.md` (etapas e progresso). Hoje: [`papeis-de-usuario`](./features/papeis-de-usuario/task.md) (concluída no backend; falta proteger a página `/admin` no frontend) e [`postagens`](./features/postagens/task.md) (blog, em andamento: começou pelo model/migration de `Category`).
+
+**Histórico do estado inicial (2026-09-02):**
 
 O projeto está no **início**. A primeira coisa implementada foi um esqueleto de autenticação — inicialmente por sessão/cookie (Breeze, prova de conceito com o antigo frontend Vite), depois migrado para token Bearer (Sanctum) para funcionar com Server Components do Next.js. O Vite e a sessão/cookie foram descartados por completo em 2026-09-02 (ver seção de limpeza abaixo) — hoje só existe o fluxo por token.
 
-Não existe nenhum model, migration, controller ou rota de **domínio** ainda (isso é a Fase 3 do roteiro abaixo). Regras de negócio serão registradas em [`regras-de-negocio.md`](./regras-de-negocio.md) conforme forem definidas.
+Naquela data não existia nenhum model, migration, controller ou rota de **domínio**; a modelagem de domínio (Fase 3 do roteiro abaixo) começou com o blog (`Category`, depois `Post`). Regras de negócio serão registradas em [`regras-de-negocio.md`](./regras-de-negocio.md) conforme forem definidas.
 
 ## Decisão de arquitetura: migração para Next.js (2026-09-02)
 
@@ -146,7 +151,7 @@ Enquanto o `.glb` e a textura da logo carregam, um loader cobre a tela: um croqu
 
 Usuário agora tem um papel (`role`, coluna `string` — não `enum` de banco, pra não exigir migration toda vez que um papel novo for adicionado), mapeado pro enum PHP `App\Enums\UserRole` (`Admin`/`Cliente`) via cast no model (`'role' => UserRole::class`). Rotas administrativas usam o middleware `App\Http\Middleware\EnsureUserIsAdmin` (alias `admin`, registrado em `bootstrap/app.php`), aplicado em conjunto com `auth:sanctum`: `Route::middleware(['auth:sanctum', 'admin'])->group(...)`. Testado manualmente via `Invoke-RestMethod` com um usuário admin (200) e um usuário cliente (403) contra uma rota de teste (`GET /api/admin`) — fluxo completo confirmado funcionando.
 
-Decisão em aberto, ainda não resolvida: se o papel `cliente` vai ter cadastro público (reabriria o registro removido na limpeza do Vite) ou só existe pra uso interno/futuro por enquanto — ver [`implementacao-papeis-de-usuario.md`](./implementacao-papeis-de-usuario.md), Parte 3.
+Decisão em aberto, ainda não resolvida: se o papel `cliente` vai ter cadastro público (reabriria o registro removido na limpeza do Vite) ou só existe pra uso interno/futuro por enquanto — ver [`features/papeis-de-usuario/spec.md`](./features/papeis-de-usuario/spec.md).
 
 ### Renomeação `frontend-next/` → `frontend/` (2026-09-02)
 
