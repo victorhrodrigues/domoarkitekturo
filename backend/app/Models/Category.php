@@ -36,5 +36,12 @@ class Category extends Model
 
             $category->slug = $aux;
         });
+
+        /* Não permite a atualização do slug */
+        static::updating(function (Category $category) {
+            if ($category->isDirty('slug')) {
+                $category->slug = $category->getOriginal('slug');
+            }
+        });
     }
 }

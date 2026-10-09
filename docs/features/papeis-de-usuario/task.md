@@ -1,6 +1,6 @@
 # Papéis de usuário (RBAC) — Task
 
-> Status: ✅ concluído e testado (login como admin → `200` em `/api/admin`; login como cliente → `403`).
+> Status: ✅ concluído e testado (login como admin → `200` em `/admin`; login como cliente → `403`, confirmado também em `POST`/`PUT`/`DELETE` de categorias). O backend não usa mais o prefixo `/api` (`apiPrefix: ''`).
 
 ## Parte 1 — Adicionar papéis ao model `User`
 
@@ -13,7 +13,7 @@
 
 - [x] **Etapa 5**: `app/Http/Middleware/EnsureUserIsAdmin.php` — `handle()` checa `$request->user()?->role !== UserRole::Admin` e barra com `abort(403, ...)`.
 - [x] **Etapa 6**: alias `'admin' => EnsureUserIsAdmin::class` registrado em `bootstrap/app.php` (`withMiddleware`).
-- [x] **Etapa 7**: rota de teste `GET /api/admin` em `routes/api.php`, dentro de `Route::middleware(['auth:sanctum', 'admin'])->group(...)`.
+- [x] **Etapa 7**: rota de teste `GET /admin` em `routes/api.php`, dentro de `Route::middleware(['auth:sanctum', 'admin'])->group(...)`.
 
 ## Pendências
 

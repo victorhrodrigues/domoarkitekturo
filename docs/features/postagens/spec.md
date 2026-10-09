@@ -39,7 +39,7 @@ A arquiteta (mãe do usuário) precisa escrever postagens de blog pelo painel ad
 ## Regras
 
 - **Slug**: gerado **uma vez**, na criação, a partir do título (`Str::slug`, que remove acentos). Em colisão, acrescenta sufixo (`-2`, `-3`...). **Não é regerado quando o título é editado**, para não quebrar links já compartilhados ou indexados. (Edição manual do slug: decisão futura.)
-- **Slug de categoria**: mesma regra (gerado do `name` no evento `creating`, uma vez, com sufixo `-2`, `-3`... em colisão, já que `name` único não garante `slug` único: "Iluminação" e "Iluminacao" geram o mesmo). O `name` precisa conter ao menos uma letra ou número, senão o slug sairia vazio (validado no Form Request).
+- **Slug de categoria**: mesma regra (gerado do `name` no evento `creating`, uma vez, com sufixo `-2`, `-3`... em colisão). O slug é **travado**: `slug` é proibido (`prohibited`) tanto no store quanto no update, então nunca é informado nem alterado por requisição. `name` único não garante `slug` único, porque o nome pode ser editado e o slug antigo fica preso (renomear "Iluminação" para "Luz" mantém `iluminacao`, e uma nova "Iluminação" vira `iluminacao-2`). O `name` precisa conter ao menos uma letra ou número, senão o slug sairia vazio (validado no Form Request).
 - **Visibilidade pública**: `status = published AND published_at <= agora`. O painel exibe o rótulo "Agendada" quando `status = published` e `published_at` está no futuro.
 - **Ao publicar sem data informada**, `published_at` recebe o momento atual.
 - **Rascunho** pode estar incompleto. **Publicar exige** (proposta, confirmar): `title`, `content`, `excerpt` e pelo menos uma categoria (senão a postagem não é achada por nenhum filtro).
@@ -49,14 +49,16 @@ A arquiteta (mãe do usuário) precisa escrever postagens de blog pelo painel ad
 
 ## API
 
-**Pública** (sem autenticação):
-- `GET /api/posts` — só publicadas, paginada, com filtro opcional por categoria (`?categoria=<slug>`).
-- `GET /api/posts/{slug}` — uma postagem publicada.
-- `GET /api/categories` — categorias para o filtro.
+> O backend não usa o prefixo `/api` (`apiPrefix: ''` em `bootstrap/app.php`), então as URLs abaixo são direto na raiz. Na implementação das categorias, as rotas de admin usam o mesmo caminho do recurso (`POST /categories`, `PUT /categories/{category}`...), diferenciadas das públicas pelos middlewares, sem prefixo `/admin`.
 
-**Admin** (`auth:sanctum` + `admin`, sob `/api/admin`):
+**Pública** (sem autenticação):
+- `GET /posts` — só publicadas, paginada, com filtro opcional por categoria (`?categoria=<slug>`).
+- `GET /posts/{slug}` — uma postagem publicada.
+- `GET /categories` — categorias para o filtro.
+
+**Admin** (`auth:sanctum` + `admin`):
 - CRUD de `posts` (enxerga todos os status) e de `categories`.
-- `POST /api/admin/uploads` — recebe uma imagem, valida tipo e tamanho, salva no disco `public` e devolve `path` e `url`. Usado pelo editor (imagens do `content`) e pela capa (a postagem guarda só o `path`). (Proposta: um único endpoint de upload para os dois usos.)
+- `POST /uploads` — recebe uma imagem, valida tipo e tamanho, salva no disco `public` e devolve `path` e `url`. Usado pelo editor (imagens do `content`) e pela capa (a postagem guarda só o `path`). (Proposta: um único endpoint de upload para os dois usos.)
 
 ## Frontend
 

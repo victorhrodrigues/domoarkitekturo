@@ -15,7 +15,8 @@
 
 **Comunicação**
 - REST API, CORS habilitado no backend (`config/cors.php`, `allowed_origins` lido de `FRONTEND_URL` = `http://localhost:3000`, porta padrão do Next.js).
-- Autenticação: `POST /api/login` devolve um token Bearer, reenviado em `Authorization: Bearer <token>` nas chamadas seguintes. Sem CSRF, sem cookie de sessão.
+- Rotas sem prefixo `/api` (`apiPrefix: ''` em `bootstrap/app.php`, decisão de 2026-10-09: o backend vai ficar num subdomínio próprio, então `api.site.com/api/...` repetiria "api"). O frontend já foi ajustado (`services/auth.ts` chama `/login`, `/user`, `/logout`; `NEXT_PUBLIC_API_URL` continua `http://localhost:8000`, sem `/api`). As menções a `/api/...` nas seções históricas abaixo (Fases 1 e 2) descrevem o estado da época.
+- Autenticação: `POST /login` devolve um token Bearer, reenviado em `Authorization: Bearer <token>` nas chamadas seguintes. Sem CSRF, sem cookie de sessão.
 
 ## Estrutura de pastas (resumo)
 
@@ -28,7 +29,9 @@ backend/
   app/Models/User.php           → usa HasApiTokens, HasUuids (id é UUID), cast de role
   app/Models/Category.php       → categorias do blog (em andamento, ver docs/features/postagens/)
   database/migrations/          → users (com coluna role), sessions, cache, jobs, personal_access_tokens (Sanctum, uuidMorphs)
-  routes/api.php                → /api/login, /api/logout, /api/user, /api/admin (protegida por auth:sanctum + admin)
+  app/Http/Controllers/CategoryController.php → CRUD de categorias (index/show públicos; store/update/destroy só admin)
+  app/Http/Requests/{Store,Update}CategoryRequest.php → validação de categoria (slug proibido: automático e travado)
+  routes/api.php                → /login, /logout, /user, /admin (teste), /categories (protegidas por auth:sanctum + admin onde aplicável)
 
 frontend/
   src/app/layout.tsx             → layout raiz (metadata global)
@@ -149,7 +152,9 @@ Enquanto o `.glb` e a textura da logo carregam, um loader cobre a tela: um croqu
 
 `users.id` deixou de ser auto-incremento e passou a ser **UUID** (`HasUuids` no model, `$table->uuid('id')->primary()` na migration) — decisão tomada cedo de propósito, antes de existir qualquer tabela de domínio referenciando `user_id`, pra não precisar converter nada depois. Toda tabela que referencia o usuário foi ajustada em conjunto: `personal_access_tokens` usa `uuidMorphs('tokenable')` (em vez do `morphs` padrão do Sanctum, que esperava bigint) e `sessions.user_id` é `foreignUuid`.
 
-Usuário agora tem um papel (`role`, coluna `string` — não `enum` de banco, pra não exigir migration toda vez que um papel novo for adicionado), mapeado pro enum PHP `App\Enums\UserRole` (`Admin`/`Cliente`) via cast no model (`'role' => UserRole::class`). Rotas administrativas usam o middleware `App\Http\Middleware\EnsureUserIsAdmin` (alias `admin`, registrado em `bootstrap/app.php`), aplicado em conjunto com `auth:sanctum`: `Route::middleware(['auth:sanctum', 'admin'])->group(...)`. Testado manualmente via `Invoke-RestMethod` com um usuário admin (200) e um usuário cliente (403) contra uma rota de teste (`GET /api/admin`) — fluxo completo confirmado funcionando.
+Usuário agora tem um papel (`role`, coluna `string` — não `enum` de banco, pra não exigir migration toda vez que um papel novo for adicionado), mapeado pro enum PHP `App\Enums\UserRole` (`Admin`/`Cliente`) via cast no model (`'role' => UserRole::class`). Rotas administrativas usam o middleware `App\Http\Middleware\EnsureUserIsAdmin` (alias `admin`, registrado em `bootstrap/app.php`), aplicado em conjunto com `auth:sanctum`: `Route::middleware(['auth:sanctum', 'admin'])->group(...)`. Testado manualmente via `Invoke-RestMethod` com um usuário admin (200) e um usuário cliente (403) contra uma rota de teste (`GET /admin`) — fluxo completo confirmado funcionando. Depois reconfirmado no Postman com as rotas reais de categorias: sem token 401, `cliente` 403, admin 2xx.
+
+Em dev (`APP_DEBUG=true`) as respostas de erro, como o 403, incluem `file`, `line` e `trace` com caminhos do servidor. Em produção, `APP_DEBUG` precisa ser `false`.
 
 Decisão em aberto, ainda não resolvida: se o papel `cliente` vai ter cadastro público (reabriria o registro removido na limpeza do Vite) ou só existe pra uso interno/futuro por enquanto — ver [`features/papeis-de-usuario/spec.md`](./features/papeis-de-usuario/spec.md).
 

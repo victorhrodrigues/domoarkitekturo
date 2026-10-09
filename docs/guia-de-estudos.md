@@ -43,7 +43,7 @@ types/user.ts      → contratos TypeScript compartilhados entre várias partes 
 services/auth.ts    → lógica de domínio (login, logout, buscar usuário logado), construída em cima da lib/.
 ```
 
-**Por que separar `lib/` de `services/`?** `lib/api.ts` não sabe o que é um "usuário" ou um "login" — ele só sabe fazer requisição HTTP e tratar erro de forma genérica. `services/auth.ts` sabe que login é um `POST /api/login` com email/senha. Se amanhã criarmos `services/projects.ts` pra buscar o portfólio, ele reaproveita a mesma `lib/api.ts`, sem duplicar a lógica de headers/erro.
+**Por que separar `lib/` de `services/`?** `lib/api.ts` não sabe o que é um "usuário" ou um "login" — ele só sabe fazer requisição HTTP e tratar erro de forma genérica. `services/auth.ts` sabe que login é um `POST /login` com email/senha (na época do texto era `/api/login`; o prefixo foi removido do backend depois). Se amanhã criarmos `services/projects.ts` pra buscar o portfólio, ele reaproveita a mesma `lib/api.ts`, sem duplicar a lógica de headers/erro.
 
 **Peças que ainda não existem, e o critério pra criar cada uma quando chegar a hora** (evitar pasta vazia — "estrutura decorativa" sem conteúdo real é pior que não ter estrutura):
 - `components/` — quando houver repetição de UI pra extrair (hoje só existe um formulário, nada se repete ainda).
@@ -203,8 +203,23 @@ Slug é o título em formato de URL (`Iluminação de Sala` vira `iluminacao-de-
 ### Postman: o corpo precisa bater com o `Content-Type`
 `form-data` codifica o corpo como multipart; com o header forçado em `application/json`, o Laravel tenta `json_decode` num multipart e os campos chegam vazios (`422`). Para API JSON, use `raw` + `JSON`.
 
+### Parâmetro de rota: o nome liga a rota ao request
+`Rule::unique('categories', 'name')->ignore($this->route('category'))` lê o parâmetro da rota **pelo nome**. `Route::apiResource('categories', ...)` gera `{category}`, então funciona; se a rota fosse escrita à mão como `{id}`, `route('category')` voltaria `null`, o `ignore` deixaria de proteger e reenviar o próprio nome daria 422, sem nenhum erro visível. `php artisan route:list` mostra os nomes reais. Para o controller, o valor chega por **posição**, não por nome (`show($id)` funciona com `{category}`).
+
+### `prohibited` só barra campo com valor, `nullable` é outra coisa
+`'slug' => ['prohibited']` rejeita o campo quando vem preenchido (422), mas aceita campo ausente, `null` ou vazio. Para travar um campo (slug gerado uma vez e nunca alterado) ele basta no request, e o model pode reforçar com um gancho `updating` que restaura o valor original (`isDirty`/`getOriginal`). `creating` e `updating` nunca disparam no mesmo `save()`, então o sufixo gerado na criação não conflita com a trava.
+
+### Closure como regra de validação
+O array de regras aceita strings, objetos (`Rule::unique(...)`) e funções anônimas `function (string $attribute, mixed $value, Closure $fail)`. Os três parâmetros são posicionais (o Laravel sempre chama nessa ordem), então `$attribute` precisa ser declarado mesmo sem uso. A mensagem vai direto no `$fail(...)`, não no `messages()`, porque uma closure não tem nome de regra. `bail` como primeiro item para a closure só rodar depois das regras anteriores passarem. Se a mesma regra for repetida em vários lugares, vale extrair com `php artisan make:rule`.
+
+### `apiPrefix: ''` remove o `/api` das rotas
+O prefixo `/api` é só convenção de endereço; o que torna uma rota "de API" é o grupo de middleware do `routes/api.php`. Em `bootstrap/app.php`, `withRouting(..., apiPrefix: '')` o remove. Custo: tudo que já chamava `/api/...` (frontend, Postman, documentação) precisa ser atualizado. Com backend em subdomínio próprio, evita a repetição `api.site.com/api/...`.
+
+### `APP_DEBUG=true` vaza o servidor nos erros
+Respostas de erro como o 403 do middleware vêm com `exception`, `file`, `line` e `trace` (caminhos do servidor) enquanto `APP_DEBUG=true`. Em produção precisa ser `false`.
+
 ### A API protegida não protege a página
-`GET /api/admin` exige token e papel; já `localhost:3000/admin` é uma página do Next.js que hoje renderiza para qualquer um. Proteger a página é outra camada (`middleware.ts`, que roda no servidor e só lê cookies, não `localStorage`, ou um guard client-side).
+`GET /admin` na API exige token e papel; já `localhost:3000/admin` é uma página do Next.js que hoje renderiza para qualquer um. Proteger a página é outra camada (`middleware.ts`, que roda no servidor e só lê cookies, não `localStorage`, ou um guard client-side).
 
 ---
 

@@ -23,7 +23,7 @@ Ninguém se registra sozinho. Contas de `cliente`, se chegarem a existir, seriam
 Um visitante consegue criar a própria conta de cliente sozinho, sem ninguém precisar criar nada manualmente. Isso exige reconstruir o fluxo de registro que foi removido — mas adaptado pra token (Sanctum Bearer), não mais sessão/cookie como era no Breeze original:
 
 - Um novo `RegisteredUserController` (ou método no `AuthenticatedTokenController`) que valida nome/e-mail/senha, cria o `User` com `role: UserRole::Cliente`, e devolve um token (igual o login já faz hoje).
-- Uma rota pública `POST /api/register` (fora do grupo `auth:sanctum`, já que ninguém está autenticado ainda nesse momento).
+- Uma rota pública `POST /register` (fora do grupo `auth:sanctum`, já que ninguém está autenticado ainda nesse momento).
 - Decidir separadamente se verificação de e-mail entra ou não pra contas de cliente (foi removida de propósito pro admin único; pra clientes públicos pode fazer mais sentido ter de volta, mas é uma decisão nova, não a mesma de antes).
 
 **Recomendação**: a Opção A é suficiente pra avançar agora (prepara a estrutura, não fecha porta nenhuma) — a Opção B só vale a pena implementar quando a Fase 2 (e-commerce) estiver realmente sendo construída e o motivo de ter clientes logados (histórico de pedido, dados salvos, etc.) existir de verdade.
