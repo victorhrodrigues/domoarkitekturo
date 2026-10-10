@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\PostStatus;
 use Database\Factories\PostFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -29,6 +30,10 @@ class Post extends Model
         'published_at',
     ];
 
+    protected $attributes = [
+        'status' => PostStatus::Draft,
+    ];
+
     protected $casts = [
         'status' => PostStatus::class,
         'published_at' => 'datetime',
@@ -45,7 +50,6 @@ class Post extends Model
             $aux = $baseSlug;
             $count = 2;
 
-            // VERIFICA SE O SLUG JÁ EXISTE NO BANCO DE DADOS, CASO EXISTA ADICIONA UM SUFIXO NUMÉRICO PARA GARANTIR QUE O SLUG SEJA ÚNICO
             while (static::where('slug', $aux)->exists()) {
                 $aux = $baseSlug.'-'.$count;
                 $count++;
@@ -64,6 +68,19 @@ class Post extends Model
                 }
             }
         });
+
+        self::saving(function (Post $post) {
+            if ($post->status === PostStatus::Published && $post->published_at === null) {
+                $post->published_at = now();
+            }
+        });
+    }
+
+    public function scopePublished(Builder $query): Builder
+    {
+        return $query
+            ->where('status', PostStatus::Published->value)
+            ->where('published_at', '<=', now());
     }
 
     /* Relação entre as categorias de uma postagem e a tabela de categorias */

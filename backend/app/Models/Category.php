@@ -6,6 +6,7 @@ use Database\Factories\CategoryFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Category extends Model
 {
@@ -43,5 +44,10 @@ class Category extends Model
                 $category->slug = $category->getOriginal('slug');
             }
         });
+    }
+
+    public function posts(): BelongsToMany
+    {
+        return $this->belongsToMany(Post::class, 'category_post', 'category_id', 'post_id');
     }
 }

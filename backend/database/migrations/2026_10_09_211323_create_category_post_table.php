@@ -12,8 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('category_post', function (Blueprint $table) {
-            $table->id();
-            $table->timestamps();
+            $table->foreignUuid('category_id')->constrained()->cascadeOnDelete();
+            $table->foreignUuid('post_id')->constrained()->cascadeOnDelete();
+            $table->primary(['post_id', 'category_id']);
         });
     }
 
