@@ -218,6 +218,108 @@ O prefixo `/api` é só convenção de endereço; o que torna uma rota "de API" 
 ### `APP_DEBUG=true` vaza o servidor nos erros
 Respostas de erro como o 403 do middleware vêm com `exception`, `file`, `line` e `trace` (caminhos do servidor) enquanto `APP_DEBUG=true`. Em produção precisa ser `false`.
 
+### `casts()`: o tradutor entre o banco e o PHP
+O banco só guarda tipos primitivos (texto, número, data como string). `casts()` diz ao Eloquent como **traduzir** cada coluna ao ler (`$model->coluna`) e ao gravar (`$model->coluna = valor`). O dado no banco continua primitivo; só o que você enxerga no PHP muda.
+
+```php
+protected function casts(): array
+{
+    return [
+        'email_verified_at' => 'datetime',   // string do banco <-> objeto Carbon (compara com now(), formata)
+        'password'          => 'hashed',     // ao atribuir, aplica Hash::make sozinho
+        'role'              => UserRole::class, // 'admin' <-> UserRole::Admin (enum)
+    ];
+}
+```
+
+- **Nos dois sentidos:** ao ler, `"admin"` vira `UserRole::Admin`; ao gravar, o enum volta a ser `"admin"`. Valor `null` fica `null` (não tenta converter).
+- **Também vale na serialização:** ao devolver o model como JSON, o enum sai como o valor (`"role": "admin"`) e a data como texto ISO. Foi o que apareceu no Postman.
+- **Tipos comuns:** `integer`, `boolean`, `array`/`json`, `date`/`datetime`, `decimal:2`, `encrypted`, `hashed`, ou a classe de um enum PHP.
+- **Limite:** só atua quando você usa o model (`$user->role`). Resultados de `DB::table(...)` vêm crus, sem cast.
+- É um **método** (`casts()`) nas versões novas do Laravel; a forma antiga era a propriedade `$casts`.
+
+### `booted()`: reagir ao ciclo de vida do model
+`booted()` é um método estático que roda uma vez, quando o model é carregado pela primeira vez na requisição. Serve para **registrar ouvintes de eventos**: pequenos trechos de código que o Eloquent executa em momentos fixos da vida de um registro. Cada ouvinte recebe o model em questão.
+
+```php
+protected static function booted()
+{
+    static::creating(function (Category $category) { /* gera o slug antes do INSERT */ });
+    static::deleted(function (User $user) { /* apaga a imagem do disco depois do DELETE */ });
+}
+```
+
+**Ordem dos eventos:**
+
+| Operação | Sequência |
+|---|---|
+| criar (`create()`/`save()` num model novo) | `saving` → `creating` → **INSERT** → `created` → `saved` |
+| atualizar | `saving` → `updating` → **UPDATE** → `updated` → `saved` |
+| apagar | `deleting` → **DELETE** → `deleted` |
+
+- **Terminados em "-ing" rodam antes**: dá para ajustar atributos (gerar slug) ou cancelar a operação retornando `false`.
+- **Terminados em "-ed" rodam depois**: servem para reagir ao que já aconteceu (limpar arquivo, registrar log).
+- `creating` e `updating` nunca disparam no mesmo `save()`: ou é criação, ou é atualização.
+- **Por que no model e não no controller:** o evento dispara de **qualquer** lugar que salve ou apague o model (controller, tinker, comando, teste), então a regra nunca é esquecida. O custo é ser "ação à distância": quem lê o controller não vê o que acontece.
+- **Quando não dispara:** operações em massa pelo query builder (`Model::where(...)->update(...)`, `->delete()`, `DB::table()->insert(...)`) e seeders com `WithoutModelEvents`. `Model::destroy($id)` e `->delete()` num model carregado disparam normalmente.
+- Use `static::` (não `self::`) dentro do `booted()`, e prefira `booted()` a sobrescrever `boot()`, que exigiria chamar `parent::boot()`. Quando os ouvintes crescem, o Laravel oferece **Observers** (`php artisan make:observer`) para tirar esse código do model.
+
+**Resumo para guardar:** `casts()` responde "**como** este atributo é convertido" (passivo, por coluna); `booted()` responde "**o que** acontece **quando**" algo ocorre com o registro (reativo, por evento).
+
+### Chave estrangeira: o que acontece quando o registro "pai" é apagado (`ON DELETE`)
+Uma chave estrangeira (`foreignUuid('post_id')->constrained()`) liga uma linha a outra tabela, e o banco passa a recusar valores que não existem lá. A pergunta que sobra é: **o que fazer com as linhas "filhas" quando a linha "pai" é apagada?** A resposta é a ação de `ON DELETE`, definida na própria chave:
+
+| Método do Laravel | Equivale a (`onDelete('...')`) | O que faz ao apagar o pai |
+|---|---|---|
+| `cascadeOnDelete()` | `cascade` | **Apaga também** as linhas filhas |
+| `restrictOnDelete()` | `restrict` | **Bloqueia** a exclusão do pai enquanto existirem filhas (erro de banco) |
+| `nullOnDelete()` | `set null` | Mantém a filha e **coloca `NULL`** na coluna da chave. A coluna precisa ser `nullable()` |
+| `noActionOnDelete()` | `no action` | No MySQL/InnoDB se comporta como `restrict` (checa na hora e bloqueia) |
+
+- `cascadeOnDelete()` é um atalho de `onDelete('cascade')`: o SQL gerado é idêntico. Os atalhos evitam erro de digitação na string e são mais legíveis.
+- **`set default`** existe no SQL padrão, mas o InnoDB (MySQL) recusa a definição da tabela, então não é uma opção aqui.
+- Existe o espelho para atualização da chave (`cascadeOnUpdate()`, `restrictOnUpdate()`...), que quase não importa com UUID, que nunca muda.
+
+**Como escolher, com exemplos do projeto:**
+- **Pivô `category_post` → `cascade`** nas duas chaves: a linha da pivô só existe para ligar as duas pontas; se o post ou a categoria some, a ligação não faz sentido e deve sumir junto (as postagens continuam existindo, só perdem o rótulo).
+- **`posts.user_id` → `set null`**: apagar o usuário não deve apagar as postagens que ele escreveu. A postagem fica sem autor.
+- **`restrict`** é a escolha quando apagar o pai por engano seria grave (ex.: não deixar apagar uma categoria que ainda tem postagens, se a relação fosse 1:n). Foi a opção que consideramos antes de optar pelo n:n.
+
+**Armadilhas:**
+- **`nullOnDelete()` numa coluna `NOT NULL` dá erro ao rodar a migration** ("column cannot be NOT NULL: needed in a foreign key constraint SET NULL"). A coluna precisa de `->nullable()` antes do `constrained()`. Foi um bug real que apareceu na migration de `posts`.
+- **O `cascade` acontece dentro do banco, sem passar pelo Eloquent.** Os eventos do model (`deleted`, como o que apaga a capa do disco) **não disparam** para as linhas filhas apagadas em cascata. Se uma filha precisar de limpeza de arquivo, o cascade sozinho não faz isso; seria preciso apagar as filhas pelo model.
+- Apagar o pai por um model (`$post->delete()`) dispara o evento do pai normalmente; o cascade só age depois, no nível do SQL.
+
+### Relação n:n: a ligação mora na tabela pivô, não em coluna
+Post e Category são n:n, então **nenhum dos dois tem coluna do outro**. A ligação fica numa tabela pivô (`category_post`) só com `post_id` e `category_id` (`foreignUuid` com `constrained()->cascadeOnDelete()` e **chave primária composta**, que impede o mesmo par duas vezes; sem `id` nem timestamps). Nos models, `belongsToMany(Category::class)` em um lado e `belongsToMany(Post::class)` no outro: "para achar as categorias deste post, passe pela pivô". Por convenção (pivô com os nomes no singular, em ordem alfabética, e colunas `post_id`/`category_id`) os argumentos extras são opcionais. Uso: `$post->categories`, `$post->categories()->sync([...ids])` (grava as marcadas e remove as que saíram), `Post::with('categories')`. A migration da pivô precisa vir **depois** das duas tabelas que ela referencia.
+
+### Enum: objeto no PHP, texto no SQL
+Lendo do model, `$post->status` já passa pelo cast e é o **objeto** enum: compare com `PostStatus::Published`. Montando uma **consulta** (`where('status', ...)`), o banco só entende o texto: use `PostStatus::Published->value`. Comparar o objeto com a string (`$post->status === 'published'`) dá sempre falso, sem erro.
+
+### Scope: uma regra de consulta reutilizável
+`scopePublished(Builder $query)` no model guarda "publicada e já na data" (`status = published AND published_at <= now()`) e é chamado como `Post::published()->...` (o prefixo `scope` some). A regra fica em um lugar só, e o `now()` é avaliado na hora da consulta, então o agendamento funciona sem job nenhum. O admin não usa o scope, porque precisa ver rascunhos, agendadas e arquivadas. O `Builder` a importar é o do Eloquent.
+
+### `$attributes` vs default do banco
+O `default('draft')` da migration só existe no banco: logo depois de um `Post::create([...])` sem `status`, o objeto em memória vem **sem** o campo até ser recarregado. `protected $attributes = ['status' => PostStatus::Draft]` no model faz o objeto já nascer coerente.
+
+### `saving` cobre criação e edição; `creating` só a criação
+Para uma regra que vale em qualquer gravação (publicada sem data recebe `now()`), use `saving`. Um `creating` não pegaria o caso de um rascunho que vira publicado numa edição.
+
+### `Storage::disk()` recebe um disco, não uma pasta
+`Storage::disk('posts/covers')` lança exceção (esse não é um disco configurado em `config/filesystems.php`); o disco é `public`, e o caminho do arquivo (`posts/covers/abc.jpg`) é o argumento do `delete()`. Um `catch (Throwable) {}` vazio escondeu o erro: o post era apagado, a capa não, e nada aparecia. Quando a falha precisa ser contida (o evento `deleted` roda depois do DELETE e não deve desfazê-lo), o `catch` deve **registrar** (`Log::warning(...)`, uma facade que grava em `storage/logs/laravel.log`), nunca engolir em silêncio. Guardar o **caminho relativo** no banco dispensa o `explode`/parsing da URL.
+
+### `required_if` e espaço depois da vírgula
+`'required_if:status, published'` (com espaço) **nunca dispara**: o Laravel não remove espaços dos parâmetros e compara com `" published"`. Foi comprovado rodando a validação: o campo vazio passava mesmo com status publicado. Escreva `required_if:status,published`, sem espaço.
+
+### `Rule::requiredIf` troca a chave da mensagem
+Com a string `required_if:...`, a mensagem se chama `campo.required_if`. Com `Rule::requiredIf(fn () => ...)` (necessário quando a condição depende de algo além do request, como o status atual da postagem no update), a regra interna é `required`, então a chave passa a ser `campo.required`. Quando o status não vem no request de update, a condição olha o status **atual** do model (`$this->route('post')`), senão um `PATCH` conseguiria apagar o conteúdo de uma postagem já publicada.
+
+### `sometimes` em vez de `nullable` para coluna `NOT NULL`
+`status` com `nullable` deixaria passar um `status: null` explícito, e o `create()` tentaria gravar `NULL` numa coluna que não aceita (o default do banco só vale quando o campo **não é enviado**). `sometimes` + `Rule::enum(PostStatus::class)` recusa o nulo e deixa o campo opcional. `Rule::enum` também faz o enum ser a única fonte da verdade dos valores válidos, ao contrário de `in:draft,published,archived` escrito à mão.
+
+### Testar um Form Request sem Postman
+Dá para validar as regras isoladas: criar o request (`UpdatePostRequest::create(...)`, com um resolvedor de rota se ele usar `$this->route()`) e chamar `Validator::make($dados, $req->rules(), $req->messages())` em dezenas de cenários, imprimindo o resultado. Se algo falhar, o problema está só nas regras, não na rota nem no controller. Foi assim que o bug do espaço no `required_if` apareceu.
+
 ### A API protegida não protege a página
 `GET /admin` na API exige token e papel; já `localhost:3000/admin` é uma página do Next.js que hoje renderiza para qualquer um. Proteger a página é outra camada (`middleware.ts`, que roda no servidor e só lê cookies, não `localStorage`, ou um guard client-side).
 

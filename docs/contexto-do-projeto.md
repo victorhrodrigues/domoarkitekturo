@@ -27,7 +27,11 @@ backend/
   app/Http/Middleware/EnsureUserIsAdmin.php                    → bloqueia rota pra quem não tem role admin (alias "admin")
   app/Enums/UserRole.php         → enum PHP (Admin/Cliente), backed por string, usado no cast do User
   app/Models/User.php           → usa HasApiTokens, HasUuids (id é UUID), cast de role
-  app/Models/Category.php       → categorias do blog (em andamento, ver docs/features/postagens/)
+  app/Models/Category.php       → categorias do blog (slug automático e travado, relação n:n com Post)
+  app/Models/Post.php           → postagens do blog (slug, scope published(), published_at automático, apaga capa ao excluir)
+  app/Enums/PostStatus.php      → draft / published / archived
+  database/migrations/          → também categories, posts e a pivô category_post (n:n)
+  app/Http/Requests/{Store,Update}PostRequest.php → validação de postagem (publicar exige resumo, conteúdo e categoria)
   database/migrations/          → users (com coluna role), sessions, cache, jobs, personal_access_tokens (Sanctum, uuidMorphs)
   app/Http/Controllers/CategoryController.php → CRUD de categorias (index/show públicos; store/update/destroy só admin)
   app/Http/Requests/{Store,Update}CategoryRequest.php → validação de categoria (slug proibido: automático e travado)
@@ -55,7 +59,7 @@ MVP (Fase 1): site institucional com catálogo vitrine (checkout via WhatsApp, s
 
 ## Estado atual (atualizado em 2026-10-08)
 
-**Catálogo de features**: cada recurso em construção tem uma pasta em [`features/`](./features/README.md) com `spec.md` (o que é) e `task.md` (etapas e progresso). Hoje: [`papeis-de-usuario`](./features/papeis-de-usuario/task.md) (concluída no backend; falta proteger a página `/admin` no frontend) e [`postagens`](./features/postagens/task.md) (blog, em andamento: começou pelo model/migration de `Category`).
+**Catálogo de features**: cada recurso em construção tem uma pasta em [`features/`](./features/README.md) com `spec.md` (o que é) e `task.md` (etapas e progresso). Hoje: [`papeis-de-usuario`](./features/papeis-de-usuario/task.md) (concluída no backend; falta proteger a página `/admin` no frontend) e [`postagens`](./features/postagens/task.md) (blog, em andamento: CRUD de categorias pronto e testado; banco, models e Form Requests de `Post` prontos e testados; falta o `PostController`, as rotas, o upload de imagens, os endpoints públicos e o frontend).
 
 **Histórico do estado inicial (2026-09-02):**
 
