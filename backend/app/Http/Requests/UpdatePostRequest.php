@@ -79,11 +79,22 @@ class UpdatePostRequest extends FormRequest
      * A postagem fica (ou continua) publicada depois deste update? Usa o status enviado
      * e, se não vier, o status atual da postagem.
      */
+    private ?bool $publicando = null;
+
     private function estaPublicando(): bool
     {
-        $post = $this->route('post');
-        $statusAtual = $post instanceof Post ? $post->status?->value : null;
+        if ($this->publicando !== null) {
+            return $this->publicando;
+        }
 
-        return $this->input('status', $statusAtual) === PostStatus::Published->value;
+        $post = $this->route('post');
+
+        if (! $post instanceof Post) {
+            $post = Post::find($post);
+        }
+
+        $statusAtual = $post?->status->value;
+
+        return $this->publicando = $this->input('status', $statusAtual) === PostStatus::Published->value;
     }
 }

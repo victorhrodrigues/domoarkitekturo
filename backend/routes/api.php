@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\AuthenticatedTokenController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\PostController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -19,6 +20,7 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     });
 
     Route::apiResource('categories', CategoryController::class)->except('index', 'show');
+    Route::apiResource('posts', PostController::class)->except('index', 'show');
 });
 
 Route::post('/login', [AuthenticatedTokenController::class, 'store']);

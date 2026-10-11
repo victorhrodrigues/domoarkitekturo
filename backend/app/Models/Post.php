@@ -74,6 +74,13 @@ class Post extends Model
                 $post->published_at = now();
             }
         });
+
+        /* Impede que o slug seja alterado após a criação do post */
+        self::updating(function (Post $post) {
+            if ($post->isDirty('slug')) {
+                $post->slug = $post->getOriginal('slug');
+            }
+        });
     }
 
     public function scopePublished(Builder $query): Builder
