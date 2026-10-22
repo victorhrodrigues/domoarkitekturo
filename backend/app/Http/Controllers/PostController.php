@@ -25,9 +25,11 @@ class PostController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(): JsonResponse
     {
-        //
+        $posts = $this->post->with('categories')->get();
+
+        return response()->json($posts, Response::HTTP_OK);
     }
 
     /**
@@ -56,9 +58,11 @@ class PostController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Post $post)
+    public function show($id): JsonResponse
     {
-        //
+        $post = $this->post->with('categories')->findOrFail($id);
+
+        return response()->json($post, Response::HTTP_OK);
     }
 
     /**
@@ -102,8 +106,11 @@ class PostController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Post $post)
+    public function destroy($id): JsonResponse
     {
-        //
+        $post = $this->post->findOrFail($id);
+        $post->delete();
+
+        return response()->json([], Response::HTTP_NO_CONTENT);
     }
 }
